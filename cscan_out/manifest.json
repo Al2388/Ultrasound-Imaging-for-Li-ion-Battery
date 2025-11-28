@@ -1,0 +1,17 @@
+{
+  "params": {
+    "roi_w_mm": 50.0,
+    "roi_h_mm": 50.0,
+    "pitch_mm": 0.1,
+    "nlines": 500,
+    "ncols": 500,
+    "speed_mm_s": 10.0,
+    "fs_hz": 20000000,
+    "gate_us": [
+      30.0,
+      40.0
+    ],
+    "prf_hint_hz": 5000.0
+  },
+  "note": "reducer=pulse_window_linear_splat_nosmooth; align=minblur_phase_corr"
+}

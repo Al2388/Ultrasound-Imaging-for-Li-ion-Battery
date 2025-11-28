@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abstract-Ultrasound IoT Cloud</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f4f9; margin: 0; padding: 20px; }
+        .header { background: #007bff; color: white; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        .container { display: flex; gap: 20px; }
+        .controls { flex: 1; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .visuals { flex: 3; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .card { background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; }
+        .card img { width: 100%; height: auto; border-radius: 4px; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; }
+        button { width: 100%; padding: 10px; margin-top: 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .btn-start { background: #28a745; color: white; }
+        .btn-stop { background: #dc3545; color: white; }
+        .status-bar { margin-top: 20px; padding: 10px; background: #e9ecef; border-radius: 4px; }
+        .status-running { color: #007bff; font-weight: bold; }
+        .cloud-badge { background: #ffc107; padding: 3px 8px; border-radius: 10px; font-size: 0.8em; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Abstract-Ultrasound IoT <span class="cloud-badge">Cloud Connected</span></h1>
+    <p>Hybrid Edge/Cloud Scanning Platform</p>
+</div>
+
+<div class="container">
+    <div class="controls">
+        <h3>Configuration</h3>
+        <label>ROI Width (mm)</label> <input type="number" id="roi_w" value="50.0">
+        <label>ROI Height (mm)</label> <input type="number" id="roi_h" value="50.0">
+        <label>Resolution (mm)</label> <input type="number" id="pitch" value="0.1">
+        <label>Speed (mm/s)</label> <input type="number" id="speed" value="10.0">
+
+        <button class="btn-start" onclick="startScan()">Start Experiment</button>
+        <button class="btn-stop" onclick="stopScan()">Emergency Stop</button>
+
+        <div class="status-bar">
+            <div>State: <span id="state">IDLE</span></div>
+            <div>Line: <span id="line">0</span> / <span id="total">0</span></div>
+            <div style="font-size: 0.9em; color: #666; margin-top:5px;" id="msg">Ready</div>
+        </div>
+    </div>
+
+    <div class="visuals">
+        <div class="card">
+            <h4>Amplitude</h4>
+            <img id="img-amp" src="" alt="Waiting for data...">
+        </div>
+        <div class="card">
+            <h4>Time of Flight</h4>
+            <img id="img-tof" src="" alt="Waiting for data...">
+        </div>
+        <div class="card">
+            <h4>Pulse Energy</h4>
+            <img id="img-eng" src="" alt="Waiting for data...">
+        </div>
+    </div>
+</div>
+
+<script>
+    setInterval(updateStatus, 1000);
+
+    async function startScan() {
+        const config = {
+            roi_w: parseFloat(document.getElementById('roi_w').value),
+            roi_h: parseFloat(document.getElementById('roi_h').value),
+            pitch: parseFloat(document.getElementById('pitch').value),
+            speed: parseFloat(document.getElementById('speed').value)
+        };
+        await fetch('/api/start', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(config)
+        });
+    }
+
+    async function stopScan() { await fetch('/api/stop', {method: 'POST'}); }
+
+    async function updateStatus() {
+        try {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            
+            document.getElementById('state').innerText = data.status;
+            document.getElementById('line').innerText = data.progress.line;
+            document.getElementById('total').innerText = data.progress.total;
+            document.getElementById('msg').innerText = data.progress.msg;
+
+            // Handle Cloud Images
+            if (data.images) {
+                if (data.images.Amplitude) document.getElementById('img-amp').src = data.images.Amplitude;
+                if (data.images.ToF) document.getElementById('img-tof').src = data.images.ToF;
+                if (data.images.Energy) document.getElementById('img-eng').src = data.images.Energy;
+            }
+
+            if (data.status === "RUNNING") {
+                document.getElementById('state').className = "status-running";
+            } else {
+                document.getElementById('state').className = "";
+            }
+        } catch (e) { console.error(e); }
+    }
+</script>
+</body>
+</html>

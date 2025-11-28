@@ -1,0 +1,13 @@
+# Security (NEVER UPLOAD THESE)
+.env
+
+# Python junk
+__pycache__/
+*.pyc
+
+# Virtual Environment (Don't upload libraries)
+.venv/
+venv/
+
+# Local Output Data (Don't upload scan images)
+cscan_out/
