@@ -1,14 +1,15 @@
-import os, time, math, threading
+import os, time, math, threading, json
 import numpy as np
 import matplotlib
-matplotlib.use("Agg") 
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from datetime import datetime, timezone
 
 from printer_control_v2 import setup_precision_printer
 from hs5_control import HS5StreamPeaks
-from cloud_manager import CloudManager  # <--- NEW IMPORT
+from cloud_manager import CloudManager
 
-# --- Helper Functions (No changes here) ---
+# --- Helper Functions ---
 def row_from_pulses_nosmooth(aa, ncols, expected_cycles, center_window=True):
     out = np.full(ncols, np.nan, dtype=np.float32)
     m = int(aa.size)
@@ -66,7 +67,6 @@ def align_row_minblur(row, ref, max_shift=8.0, prev_shift=0.0):
     row_out = np.fft.irfft(np.fft.rfft(np.nan_to_num(row, nan=0.0)) * np.exp(-2j*np.pi*k*shift_use), n=n)
     return row_out.astype(np.float32), shift_use
 
-# --- The Service Class ---
 class CScanService:
     def __init__(self):
         self.running = False
@@ -79,8 +79,6 @@ class CScanService:
             "cols": 500, "out_dir": "cscan_out", "cmap": "turbo"
         }
         self.images = {"Amplitude": None, "ToF": None, "Energy": None}
-        
-        # Initialize Cloud
         self.cloud = CloudManager()
 
     def start_scan(self, new_config=None):
@@ -100,15 +98,94 @@ class CScanService:
             return True
         return False
 
+    def return_to_start(self):
+        """Moves printer back to scan start WITHOUT resetting coordinates."""
+        if self.running: return False, "Stop scan first."
+        try:
+            self.status = "MOVING"
+            pr, xl, xr, ys, ye = setup_precision_printer(
+                "COM6", 115200, 
+                self.config["roi_w"], self.config["roi_h"], 
+                reset_origin=False 
+            )
+            print("[PRINTER] Reversing to Origin (0,0)...")
+            pr.move_to_position(0.0, 0.0, fast=True)
+            pr.wait_for_completion()
+            pr.close()
+            self.status = "IDLE"
+            self.progress["msg"] = "Returned to Start."
+            return True, "Returned"
+        except Exception as e:
+            self.status = "ERROR"
+            return False, str(e)
+
+    def jog_z_axis(self, z_distance):
+        if self.running: return False, "Cannot move Z while scanning."
+        try:
+            pr, _, _, _, _ = setup_precision_printer(
+                "COM6", 115200, 
+                self.config["roi_w"], self.config["roi_h"], 
+                reset_origin=False
+            )
+            pr.send_command("G91")
+            pr.send_command(f"G1 Z{z_distance:.3f} F300")
+            pr.wait_for_completion()
+            pr.send_command("G90")
+            pr.close()
+            return True, f"Moved Z by {z_distance}mm"
+        except Exception as e:
+            return False, str(e)
+
+    def _upload_full_data_package(self, amp_arr, tof_arr, eng_arr):
+        """Bundles Data + Coordinates + Metadata into JSON."""
+        if not self.cloud.enabled: return
+
+        ts = int(time.time())
+        filename = f"scan_data_package_{ts}.json"
+        local_path = os.path.join(self.config["out_dir"], filename)
+
+        # Generate Coordinate Vectors
+        rows, cols = amp_arr.shape
+        y_axis = np.linspace(0, self.config["roi_h"], rows).tolist()
+        x_axis = np.linspace(0, self.config["roi_w"], cols).tolist()
+
+        # Scientific Metadata Package
+        data_package = {
+            "experiment_info": {
+                "id": f"scan_{ts}",
+                "timestamp_iso": datetime.now(timezone.utc).isoformat(),
+                "operator": "IoT_System"
+            },
+            "acquisition_settings": {
+                "instrument": "TiePie HS5",
+                "sampling_rate_hz": 20_000_000,
+                "gate_window_us": {"start": 30.0, "end": 40.0}
+            },
+            "spatial_axes": {
+                "x_mm": x_axis, 
+                "y_mm": y_axis, 
+                "units": "millimeters"
+            },
+            "features": {
+                "amplitude": np.nan_to_num(amp_arr).tolist(),
+                "time_of_flight": np.nan_to_num(tof_arr).tolist(),
+                "pulse_energy": np.nan_to_num(eng_arr).tolist()
+            }
+        }
+
+        try:
+            with open(local_path, 'w') as f: json.dump(data_package, f)
+            self.cloud.upload_file_async(local_path, filename, "application/json")
+            print(f"[DATA] Uploaded Package: {filename}")
+        except Exception as e:
+            print(f"[DATA] Packaging Failed: {e}")
+
     def _save_plot(self, img, name, label):
-        """Saves locally AND uploads to cloud"""
         if not np.any(np.isfinite(img)): return
         
-        # 1. Save Locally
         local_path = os.path.join(self.config["out_dir"], name)
         cm = matplotlib.colormaps.get_cmap(self.config["cmap"]).copy()
         cm.set_bad('white')
-        
         finite = img[np.isfinite(img)]
         vmin, vmax = np.percentile(finite, [5, 95]) if finite.size >= 16 else (0, 1)
         
@@ -120,14 +197,14 @@ class CScanService:
         plt.colorbar(); plt.tight_layout()
         plt.savefig(local_path, bbox_inches='tight')
         plt.close()
-        
-        # 2. Upload to Cloud
-        cloud_url = self.cloud.upload_image_async(local_path, label)
-        
-        if cloud_url:
-            self.images[label] = cloud_url  # Use AWS URL
+
+        if self.cloud.enabled:
+            ts = int(time.time())
+            img_cloud_name = f"{label.lower()}_{ts}.png"
+            img_url = self.cloud.upload_file_async(local_path, img_cloud_name, "image/png")
+            self.images[label] = img_url
         else:
-            self.images[label] = f"/local/{name}" # Fallback to local
+            self.images[label] = f"/local/{name}"
 
     def _worker(self):
         cfg = self.config
@@ -142,7 +219,7 @@ class CScanService:
         pr, hs = None, None
         try:
             self.progress["msg"] = "Initializing Hardware..."
-            pr, xl, xr, ys, ye = setup_precision_printer("COM6", 115200, cfg["roi_w"], cfg["roi_h"])
+            pr, xl, xr, ys, ye = setup_precision_printer("COM6", 115200, cfg["roi_w"], cfg["roi_h"], reset_origin=True)
             hs = HS5StreamPeaks(fs_hz=20_000_000, feature_mode="envelope").open()
             hs.calibrate_sync(seconds=1.0, verbose=False)
             
@@ -199,10 +276,12 @@ class CScanService:
                     self._save_plot(img_amp, "scan_amp.png", "Amplitude")
                     self._save_plot(img_tof, "scan_tof.png", "ToF")
                     self._save_plot(img_eng, "scan_eng.png", "Energy")
+                    # Upload JSON Data
+                    self._upload_full_data_package(img_amp, img_tof, img_eng)
             
             if not self.stop_signal:
                 self.progress["msg"] = "Returning to Start..."
-                pr.move_to_position(xl, ys, fast=True)
+                pr.move_to_position(0.0, 0.0, fast=True)
                 pr.wait_for_completion()
 
             self.status = "COMPLETED"

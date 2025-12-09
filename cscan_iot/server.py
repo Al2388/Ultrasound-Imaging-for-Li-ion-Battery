@@ -11,7 +11,6 @@ app = FastAPI()
 scanner = CScanService()
 templates = Jinja2Templates(directory="templates")
 
-# Mount local folder for fallback if cloud fails
 app.mount("/local", StaticFiles(directory="cscan_out"), name="local")
 
 @app.get("/", response_class=HTMLResponse)
@@ -27,6 +26,17 @@ async def start_scan(payload: dict):
 async def stop_scan():
     if scanner.stop_scan(): return {"msg": "Stopping..."}
     return {"msg": "Not running"}
+
+@app.post("/api/return")
+async def return_home():
+    success, msg = scanner.return_to_start()
+    return {"success": success, "msg": msg}
+
+@app.post("/api/jog_z")
+async def jog_z(payload: dict):
+    dist = payload.get("z", 0.0)
+    success, msg = scanner.jog_z_axis(dist)
+    return {"success": success, "msg": msg}
 
 @app.get("/api/status")
 async def status():

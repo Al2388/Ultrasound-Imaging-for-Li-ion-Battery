@@ -3,109 +3,193 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Abstract-Ultrasound IoT Cloud</title>
+    <title>Ultrasonic IoT Controller</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f4f4f9; margin: 0; padding: 20px; }
-        .header { background: #007bff; color: white; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-        .container { display: flex; gap: 20px; }
-        .controls { flex: 1; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .visuals { flex: 3; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .card { background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; }
-        .card img { width: 100%; height: auto; border-radius: 4px; }
-        label { display: block; margin-top: 10px; font-weight: bold; }
-        input { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; }
-        button { width: 100%; padding: 10px; margin-top: 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
-        .btn-start { background: #28a745; color: white; }
-        .btn-stop { background: #dc3545; color: white; }
-        .status-bar { margin-top: 20px; padding: 10px; background: #e9ecef; border-radius: 4px; }
-        .status-running { color: #007bff; font-weight: bold; }
-        .cloud-badge { background: #ffc107; padding: 3px 8px; border-radius: 10px; font-size: 0.8em; }
+        :root {
+            --primary: #2563eb;
+            --secondary: #475569;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --bg: #f1f5f9;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+        }
+
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); margin: 0; display: flex; height: 100vh; color: var(--text-main); }
+        
+        .sidebar {
+            width: 300px;
+            background: #1e293b;
+            color: white;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            box-shadow: 4px 0 10px rgba(0,0,0,0.1);
+        }
+
+        .brand { font-size: 1.2rem; font-weight: bold; margin-bottom: 30px; display: flex; align-items: center; gap: 10px; }
+        .brand i { color: var(--primary); }
+
+        .control-group { background: #334155; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .control-group h3 { margin-top: 0; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; border-bottom: 1px solid #475569; padding-bottom: 5px; }
+
+        label { display: block; font-size: 0.85rem; margin-top: 10px; color: #cbd5e1; }
+        input { width: 100%; background: #0f172a; border: 1px solid #475569; color: white; padding: 8px; border-radius: 4px; box-sizing: border-box; }
+
+        button { width: 100%; padding: 12px; margin-top: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: 0.2s; display: flex; justify-content: center; align-items: center; gap: 8px; }
+        .btn-start { background: var(--success); color: white; }
+        .btn-start:hover { background: #16a34a; }
+        .btn-stop { background: var(--danger); color: white; }
+        .btn-return { background: var(--primary); color: white; }
+        
+        .z-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 10px; }
+        .btn-z { background: #475569; color: white; padding: 8px; font-size: 0.9rem; margin-top: 0; }
+        .btn-z:hover { background: #64748b; }
+
+        .main { flex: 1; padding: 30px; overflow-y: auto; }
+        
+        .status-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: var(--card-bg); padding: 15px 25px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .status-badge { padding: 5px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; background: #e2e8f0; color: #64748b; }
+        .status-badge.running { background: #dcfce7; color: #166534; animation: pulse 2s infinite; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; }
+        .card { background: var(--card-bg); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); transition: transform 0.2s; }
+        .card:hover { transform: translateY(-2px); }
+        .card-header { padding: 15px; border-bottom: 1px solid #f1f5f9; font-weight: 600; display: flex; justify-content: space-between; }
+        .card img { width: 100%; height: auto; display: block; min-height: 250px; background: #f8fafc; }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
 
-<div class="header">
-    <h1>Abstract-Ultrasound IoT <span class="cloud-badge">Cloud Connected</span></h1>
-    <p>Hybrid Edge/Cloud Scanning Platform</p>
-</div>
+    <div class="sidebar">
+        <div class="brand">
+            <i class="fas fa-wave-square"></i> C-Scan IoT
+        </div>
 
-<div class="container">
-    <div class="controls">
-        <h3>Configuration</h3>
-        <label>ROI Width (mm)</label> <input type="number" id="roi_w" value="50.0">
-        <label>ROI Height (mm)</label> <input type="number" id="roi_h" value="50.0">
-        <label>Resolution (mm)</label> <input type="number" id="pitch" value="0.1">
-        <label>Speed (mm/s)</label> <input type="number" id="speed" value="10.0">
+        <div class="control-group">
+            <h3>Scan Config</h3>
+            <label>ROI Width (mm)</label> <input type="number" id="roi_w" value="50.0">
+            <label>ROI Height (mm)</label> <input type="number" id="roi_h" value="50.0">
+            <label>Resolution (mm)</label> <input type="number" id="pitch" value="0.1">
+            <label>Speed (mm/s)</label> <input type="number" id="speed" value="10.0">
+        </div>
 
-        <button class="btn-start" onclick="startScan()">Start Experiment</button>
-        <button class="btn-stop" onclick="stopScan()">Emergency Stop</button>
+        <div class="control-group">
+            <h3>Probe Height (Z)</h3>
+            <div style="font-size: 0.8em; color: #94a3b8; margin-bottom: 5px;">Jog probe up/down to focus.</div>
+            <div class="z-controls">
+                <button class="btn-z" onclick="moveZ(1.0)"><i class="fas fa-arrow-up"></i> 1mm</button>
+                <button class="btn-z" onclick="moveZ(0.1)"><i class="fas fa-chevron-up"></i> 0.1mm</button>
+                <button class="btn-z" onclick="moveZ(-1.0)"><i class="fas fa-arrow-down"></i> 1mm</button>
+                <button class="btn-z" onclick="moveZ(-0.1)"><i class="fas fa-chevron-down"></i> 0.1mm</button>
+            </div>
+            <button class="btn-z" style="margin-top:5px; background: #ef4444;" onclick="moveZ(5.0)">Lift Safe (+5mm)</button>
+        </div>
 
-        <div class="status-bar">
-            <div>State: <span id="state">IDLE</span></div>
-            <div>Line: <span id="line">0</span> / <span id="total">0</span></div>
-            <div style="font-size: 0.9em; color: #666; margin-top:5px;" id="msg">Ready</div>
+        <div class="control-group">
+            <h3>Actions</h3>
+            <button class="btn-start" onclick="startScan()"><i class="fas fa-play"></i> Start Scan</button>
+            <button class="btn-stop" onclick="stopScan()"><i class="fas fa-stop"></i> Emergency Stop</button>
+            <button class="btn-return" onclick="returnToStart()"><i class="fas fa-undo"></i> Return to Start</button>
+        </div>
+        
+        <div style="margin-top: auto; font-size: 0.8rem; color: #64748b;">
+            IoT System v2.1<br>Connected to AWS S3
         </div>
     </div>
 
-    <div class="visuals">
-        <div class="card">
-            <h4>Amplitude</h4>
-            <img id="img-amp" src="" alt="Waiting for data...">
+    <div class="main">
+        <div class="status-header">
+            <div>
+                <h2 style="margin:0; font-size:1.5rem;">Live Dashboard</h2>
+                <div style="color: #64748b; font-size: 0.9rem;" id="msg">System Ready</div>
+            </div>
+            <div style="text-align: right;">
+                <div id="state-badge" class="status-badge">IDLE</div>
+                <div style="margin-top:5px; font-weight:bold;">Line: <span id="line">0</span> / <span id="total">0</span></div>
+            </div>
         </div>
-        <div class="card">
-            <h4>Time of Flight</h4>
-            <img id="img-tof" src="" alt="Waiting for data...">
-        </div>
-        <div class="card">
-            <h4>Pulse Energy</h4>
-            <img id="img-eng" src="" alt="Waiting for data...">
+
+        <div class="grid">
+            <div class="card">
+                <div class="card-header">
+                    <span><i class="fas fa-chart-area"></i> Amplitude</span>
+                    <i class="fas fa-cloud" style="color:#2563eb;" title="Cloud Synced"></i>
+                </div>
+                <img id="img-amp" src="/local/placeholder.png" alt="Waiting for scan...">
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <span><i class="fas fa-clock"></i> Time of Flight</span>
+                    <i class="fas fa-cloud" style="color:#2563eb;" title="Cloud Synced"></i>
+                </div>
+                <img id="img-tof" src="/local/placeholder.png" alt="Waiting for scan...">
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <span><i class="fas fa-bolt"></i> Pulse Energy</span>
+                    <i class="fas fa-cloud" style="color:#2563eb;" title="Cloud Synced"></i>
+                </div>
+                <img id="img-eng" src="/local/placeholder.png" alt="Waiting for scan...">
+            </div>
         </div>
     </div>
-</div>
 
-<script>
-    setInterval(updateStatus, 1000);
+    <script>
+        setInterval(updateStatus, 1000);
 
-    async function startScan() {
-        const config = {
-            roi_w: parseFloat(document.getElementById('roi_w').value),
-            roi_h: parseFloat(document.getElementById('roi_h').value),
-            pitch: parseFloat(document.getElementById('pitch').value),
-            speed: parseFloat(document.getElementById('speed').value)
-        };
-        await fetch('/api/start', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(config)
-        });
-    }
+        async function apiCall(endpoint, body=null) {
+            try {
+                const opts = { method: 'POST', headers: {'Content-Type': 'application/json'} };
+                if(body) opts.body = JSON.stringify(body);
+                const res = await fetch(endpoint, opts);
+                const data = await res.json();
+                console.log(data.msg);
+            } catch(e) { console.error(e); }
+        }
 
-    async function stopScan() { await fetch('/api/stop', {method: 'POST'}); }
+        function startScan() {
+            apiCall('/api/start', {
+                roi_w: parseFloat(document.getElementById('roi_w').value),
+                roi_h: parseFloat(document.getElementById('roi_h').value),
+                pitch: parseFloat(document.getElementById('pitch').value),
+                speed: parseFloat(document.getElementById('speed').value)
+            });
+        }
 
-    async function updateStatus() {
-        try {
-            const res = await fetch('/api/status');
-            const data = await res.json();
-            
-            document.getElementById('state').innerText = data.status;
-            document.getElementById('line').innerText = data.progress.line;
-            document.getElementById('total').innerText = data.progress.total;
-            document.getElementById('msg').innerText = data.progress.msg;
+        function stopScan() { apiCall('/api/stop'); }
+        function returnToStart() { apiCall('/api/return'); }
+        function moveZ(dist) { apiCall('/api/jog_z', {z: dist}); }
 
-            // Handle Cloud Images
-            if (data.images) {
-                if (data.images.Amplitude) document.getElementById('img-amp').src = data.images.Amplitude;
-                if (data.images.ToF) document.getElementById('img-tof').src = data.images.ToF;
-                if (data.images.Energy) document.getElementById('img-eng').src = data.images.Energy;
-            }
+        async function updateStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                
+                document.getElementById('line').innerText = data.progress.line;
+                document.getElementById('total').innerText = data.progress.total;
+                document.getElementById('msg').innerText = data.progress.msg;
+                
+                const badge = document.getElementById('state-badge');
+                badge.innerText = data.status;
+                if (data.status === "RUNNING" || data.status === "MOVING") {
+                    badge.classList.add("running");
+                } else {
+                    badge.classList.remove("running");
+                }
 
-            if (data.status === "RUNNING") {
-                document.getElementById('state').className = "status-running";
-            } else {
-                document.getElementById('state').className = "";
-            }
-        } catch (e) { console.error(e); }
-    }
-</script>
+                if (data.images) {
+                    const ts = new Date().getTime(); 
+                    if (data.images.Amplitude) document.getElementById('img-amp').src = data.images.Amplitude;
+                    if (data.images.ToF) document.getElementById('img-tof').src = data.images.ToF;
+                    if (data.images.Energy) document.getElementById('img-eng').src = data.images.Energy;
+                }
+            } catch (e) { console.error(e); }
+        }
+    </script>
 </body>
 </html>
